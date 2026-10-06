@@ -1,0 +1,47 @@
+name: Build MoodGen
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S MoodGen -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build VST3
+        run: cmake --build build --config Release --target MoodGen_VST3 --parallel 4
+
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p MoodGen/dist
+          cp -R "$(find build -type d -name 'MoodGen.vst3' | head -n 1)" MoodGen/dist/
+
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" MoodGen\installer\MoodGen.iss
+
+      - name: Upload Windows installer
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoodGen-Setup-Windows
+          path: MoodGen/installer_out/MoodGen-Setup.exe
+
+      - name: Upload VST3 bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoodGen-VST3-${{ matrix.os }}
+          path: MoodGen/dist
